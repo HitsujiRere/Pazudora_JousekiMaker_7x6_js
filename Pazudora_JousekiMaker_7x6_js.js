@@ -1,4 +1,7 @@
 
+// マウスが前フレーム時押していたか
+let pmouseIsPressed = false;
+
 // ドロップの表示サイズ
 const dropDisplaySize = 64;
 // ドロップの種類数
@@ -13,11 +16,18 @@ const boardWidth = 7;
 const board = Array.from(new Array(boardHeight),
     () => new Array(boardWidth));
 
+// ドロップを押しているかどうか
+let dropIsPressed = false;
+// 押しているドロップの座標
+let pressedDropY = 0;
+let pressedDropX = 0;
+
 // 選択しているボタン
 const buttonTexts = ['random', 'deploy', 'play']
 let selectedButton = 0;
 
 function preload() {
+
     // ドロップの画像読込み
     for (let i = 0; i < dropCount; ++i) {
         print('images/drop_' + i + '.png');
@@ -27,7 +37,7 @@ function preload() {
 }
 
 function setup() {
-    createCanvas(dropDisplaySize * 7, dropDisplaySize * 8);
+    createCanvas(dropDisplaySize * boardWidth, dropDisplaySize * (boardHeight + 2));
 
     textAlign(CENTER, CENTER);
     imageMode(CENTER);
@@ -36,6 +46,77 @@ function setup() {
 }
 
 function draw() {
+    update();
+
+    display();
+}
+
+function update() {
+    // ドロップ
+    if (mouseIsPressed) {
+
+        // 現在押しているドロップ
+        let pressedDropYNow = -1;
+        let pressedDropXNow = -1;
+
+        // 現在どのドロップを押しているか判定する
+        for (let y = 0; y < boardHeight; ++y) {
+            for (let x = 0; x < boardWidth; ++x) {
+                if (dist(mouseX, mouseY, dropDisplaySize * (x + 0.5), dropDisplaySize * (y + 0.5)) <= dropDisplaySize / 2) {
+                    pressedDropYNow = y;
+                    pressedDropXNow = x;
+                }
+            }
+        }
+
+        if (pressedDropYNow !== -1 && pressedDropYNow !== -1) {
+            if (dropIsPressed) {
+                // 交換する
+                let tmp = board[pressedDropY][pressedDropX];
+                board[pressedDropY][pressedDropX] = board[pressedDropYNow][pressedDropXNow];
+                board[pressedDropYNow][pressedDropXNow] = tmp;
+
+                pressedDropY = pressedDropYNow;
+                pressedDropX = pressedDropXNow;
+            } else {
+                dropIsPressed = true;
+                pressedDropY = pressedDropYNow;
+                pressedDropX = pressedDropXNow;
+            }
+        }
+    } else {
+        dropIsPressed = false;
+        pressedDropY = -1;
+        pressedDropX = -1;
+    }
+
+    // ボタン
+    if (mouseIsPressed && !pmouseIsPressed) {
+
+        // 今押しているボタン
+        let pressedButtonNow = -1;
+
+        for (let i = 0; i < 3; ++i) {
+            if (width / 3 * i <= mouseX && mouseX < width / 3 * (i + 1) &&
+                dropDisplaySize * boardHeight <= mouseY && mouseY < dropDisplaySize * (boardHeight + 1)) {
+                pressedButtonNow = i;
+            }
+        }
+
+        if (pressedButtonNow !== -1) {
+            selectedButton = pressedButtonNow;
+
+            if (selectedButton === 0) {
+                randomizeBoard();
+            }
+        }
+    }
+
+    pmouseIsPressed = mouseIsPressed;
+}
+
+function display() {
+
     background(40, 25, 20);
 
     // 背景
@@ -55,14 +136,27 @@ function draw() {
     // ドロップ
     for (let y = 0; y < boardHeight; ++y) {
         for (let x = 0; x < boardWidth; ++x) {
-            image(dropImages[board[y][x]],
-                dropDisplaySize * (x + 0.5), dropDisplaySize * (y + 0.5),
-                dropDisplaySize, dropDisplaySize);
+            if (y !== pressedDropY || x !== pressedDropX) {
+                image(dropImages[board[y][x]],
+                    dropDisplaySize * (x + 0.5), dropDisplaySize * (y + 0.5),
+                    dropDisplaySize, dropDisplaySize);
+            }
+
+            // fill(255, 0, 0, 200);
+            // ellipse(dropDisplaySize * (x + 0.5), dropDisplaySize * (y + 0.5), dropDisplaySize);
         }
+    }
+
+    // 押しているドロップを拡大表示
+    if (dropIsPressed) {
+        image(dropImages[board[pressedDropY][pressedDropX]],
+            mouseX, mouseY,
+            dropDisplaySize * 1.3, dropDisplaySize * 1.3);
     }
 
     // ボタン
     for (let i = 0; i < 3; ++i) {
+
         // ボタン
         if (i === selectedButton) {
             fill(68, 157, 132);
@@ -80,7 +174,8 @@ function draw() {
         text(buttonTexts[i],
             width / 3 * (i + 0.5), dropDisplaySize * (boardHeight + 0.5));
 
-        if (i === selectedButton && i === 0) {
+        // 編集ドロップ
+        if (i === selectedButton && i === 1) {
             for (let i = 0; i < dropCount; ++i) {
                 image(dropImages[i],
                     dropDisplaySize * (i + 0.5), dropDisplaySize * (boardHeight + 1.5),
