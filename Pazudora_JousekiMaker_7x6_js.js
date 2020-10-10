@@ -54,8 +54,16 @@ const comboNumberBoard = Array.from(new Array(boardHeight),
 
 // 消えるコンボの経過ミリ秒
 let removedComboMills = 0;
+// 消えるコンボの経過ミリ秒
+const removedComboMillsMax = 500;
 // 消えたコンボの数
 let removedComboCount = 0;
+// 前のコンボの累計
+let comboSum = 0;
+
+// 前に進むかどうか
+let isUpdateDrops = true;
+
 
 function preload() {
 
@@ -77,6 +85,7 @@ function setup() {
 }
 
 function draw() {
+
     update();
 
     display();
@@ -88,33 +97,25 @@ function draw() {
 
 function update() {
 
-    if (isJudging) {
+    if (isUpdateDrops) {
 
-        removeCombo();
-    } else {
+        if (isJudging) {
 
-        dropUpdate();
+            removeCombo();
+        } else {
 
-        buttonUpdate();
-    }
-}
+            dropUpdate();
 
-function removeCombo() {
-
-    // 経過時間
-    const elapsedTime = millis() - pmillis;
-
-    removedComboMills += elapsedTime;
-
-    console.log(removedComboCount, removedComboMills, elapsedTime);
-
-    if (removedComboMills >= 1000) {
-        removedComboCount++;
-        removedComboMills -= 1000;
+            buttonUpdate();
+        }
     }
 
-    if (removedComboCount == comboCount) {
+    if (!isUpdateDrops && mouseIsPressed && !pmouseIsPressed) {
+
+        isUpdateDrops = true;
+
         isJudging = false;
+        comboSum = 0;
         comboCount = 0;
         removedComboMills = 0;
         removedComboCount = 0;
@@ -125,6 +126,59 @@ function removeCombo() {
                 removedBoard[y][x] = 0;
                 comboNumberBoard[y][x] = -1;
             }
+        }
+    }
+}
+
+function removeCombo() {
+
+    // 経過時間
+    const elapsedTime = millis() - pmillis;
+
+    removedComboMills += elapsedTime;
+
+    if (removedComboMills >= removedComboMillsMax) {
+        removedComboCount++;
+        removedComboMills -= removedComboMillsMax;
+    }
+
+    if (removedComboCount >= comboCount) {
+        comboSum += comboCount;
+        comboCount = 0;
+        removedComboMills = 0;
+        removedComboCount = 0;
+
+        for (let y = 0; y < boardHeight; ++y) {
+            for (let x = 0; x < boardWidth; ++x) {
+                if (removedBoard[y][x]) {
+                    board[y][x] = -1;
+                }
+                removedBoard[y][x] = 0;
+                comboNumberBoard[y][x] = -1;
+            }
+        }
+
+        for (let x = 0; x < boardWidth; ++x) {
+
+            // 落ちる先のY
+            let fallToY = boardHeight - 1;
+
+            for (let y = fallToY; y >= 0; --y) {
+                if (board[y][x] !== -1) {
+                    board[fallToY][x] = board[y][x];
+                    --fallToY;
+                }
+            }
+
+            for (let y = fallToY; y >= 0; --y) {
+                board[y][x] = -1;
+            }
+        }
+
+        judgeBoard();
+
+        if (comboCount === 0) {
+            isUpdateDrops = false;
         }
     }
 }
@@ -150,7 +204,9 @@ function dropUpdate() {
         if (pressedDropYNow !== -1 && pressedDropYNow !== -1) {
 
             if (selectedButton === 1) {
-                board[pressedDropYNow][pressedDropXNow] = deployDrop;
+                board[pressedDropYNow][pressedDropXNow]
+                    = boardOriginally[pressedDropYNow][pressedDropXNow]
+                    = deployDrop;
             }
 
             if (selectedButton === 2) {
@@ -166,9 +222,11 @@ function dropUpdate() {
 
                     dropIsMoved = true;
                 } else {
-                    dropIsPressed = true;
-                    pressedDropY = pressedDropYNow;
-                    pressedDropX = pressedDropXNow;
+                    if (board[pressedDropYNow][pressedDropXNow] !== -1) {
+                        dropIsPressed = true;
+                        pressedDropY = pressedDropYNow;
+                        pressedDropX = pressedDropXNow;
+                    }
                 }
             }
         }
@@ -297,7 +355,7 @@ function display() {
     // ドロップ
     for (let y = 0; y < boardHeight; ++y) {
         for (let x = 0; x < boardWidth; ++x) {
-            if (y !== pressedDropY || x !== pressedDropX) {
+            if ((y !== pressedDropY || x !== pressedDropX) && board[y][x] !== -1) {
                 if (removedBoard[y][x]) {
                     if (comboNumberBoard[y][x] > removedComboCount) {
                         image(dropImages[board[y][x]],
@@ -306,7 +364,7 @@ function display() {
                             dropDisplaySize, dropDisplaySize);
                     }
                     else if (comboNumberBoard[y][x] === removedComboCount) {
-                        tint(256, 256 * (1 - removedComboMills / 1000));
+                        tint(256, 256 * (1 - removedComboMills / removedComboMillsMax));
                         image(dropImages[board[y][x]],
                             dropDisplaySize * (x + 0.5),
                             dropDisplaySize * (y + 0.5),
@@ -315,15 +373,26 @@ function display() {
                     }
                 }
                 else {
+
+                    if (!isUpdateDrops) {
+                        tint(128);
+                    }
+
                     image(dropImages[board[y][x]],
                         dropDisplaySize * (x + 0.5),
                         dropDisplaySize * (y + 0.5),
                         dropDisplaySize, dropDisplaySize);
+
+                    if (!isUpdateDrops) {
+                        noTint();
+                    }
                 }
 
-                fill(0);
+                fill(255);
                 if (comboNumberBoard[y][x] !== -1) {
-                    text(comboNumberBoard[y][x], dropDisplaySize * (x + 0.5), dropDisplaySize * (y + 0.5))
+                    text(comboNumberBoard[y][x] + comboSum + 1,
+                        dropDisplaySize * (x + 0.5),
+                        dropDisplaySize * (y + 0.5))
                 }
             }
         }
@@ -387,7 +456,7 @@ function judgeBoard() {
     // コンボドロップの判定
     for (let y = 0; y < boardHeight; ++y) {
         for (let x = 0; x < boardWidth; ++x) {
-            if (comboNumberBoard[y][x] === -1 && removedBoard[y][x]) {
+            if (board[y][x] !== -1 && comboNumberBoard[y][x] === -1 && removedBoard[y][x]) {
                 searchCombo(x, y, comboCount);
                 ++comboCount;
             }
